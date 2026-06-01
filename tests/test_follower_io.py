@@ -87,8 +87,41 @@ def test_read_via_editor(mocker, tmp_path):
 
     def fake_run(cmd, check):
         # simulate the editor writing content
-        target.write_text(json.dumps(VALID_PAYLOAD))
+        target.write_text(json.dumps(VALID_PAYLOAD), encoding="utf-8")
 
     mocker.patch("kudostracker.follower_io.subprocess.run", side_effect=fake_run)
     mocker.patch("kudostracker.follower_io.os.environ.get", return_value="vim")
     assert follower_io.read_via_editor(target) == json.dumps(VALID_PAYLOAD)
+
+
+def test_read_via_editor_handles_editor_with_args(mocker, tmp_path):
+    target = tmp_path / "scratch.json"
+    target.write_text("[]", encoding="utf-8")
+
+    captured = {}
+    def fake_run(cmd, check):
+        captured["cmd"] = cmd
+
+    mocker.patch("kudostracker.follower_io.subprocess.run", side_effect=fake_run)
+    mocker.patch.dict("os.environ", {"EDITOR": "code --wait"})
+    follower_io.read_via_editor(target)
+    assert captured["cmd"][:2] == ["code", "--wait"]
+    assert captured["cmd"][-1] == str(target)
+
+
+def test_read_via_editor_raises_on_nonzero_exit(mocker, tmp_path):
+    import subprocess
+    target = tmp_path / "scratch.json"
+    mocker.patch(
+        "kudostracker.follower_io.subprocess.run",
+        side_effect=subprocess.CalledProcessError(1, ["vim"]),
+    )
+    mocker.patch.dict("os.environ", {"EDITOR": "vim"})
+    with pytest.raises(follower_io.EditorAborted):
+        follower_io.read_via_editor(target)
+
+
+def test_parse_rejects_bool_as_id():
+    bad = json.dumps([{"id": True, "name": "x", "url": "y"}])
+    with pytest.raises(follower_io.InvalidPayload):
+        follower_io.parse_payload(bad)

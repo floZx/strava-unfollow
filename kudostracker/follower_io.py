@@ -1,5 +1,6 @@
 import json
 import os
+import shlex
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,10 @@ class InvalidPayload(ValueError):
 
 
 class ClipboardUnavailable(RuntimeError):
+    pass
+
+
+class EditorAborted(RuntimeError):
     pass
 
 
@@ -31,7 +36,7 @@ def parse_payload(raw: str) -> list[dict[str, Any]]:
         for field, ftype in REQUIRED_FIELDS.items():
             if field not in item:
                 raise InvalidPayload(f"Élément #{i} : champ '{field}' manquant")
-            if not isinstance(item[field], ftype):
+            if not isinstance(item[field], ftype) or (ftype is int and isinstance(item[field], bool)):
                 raise InvalidPayload(
                     f"Élément #{i} : champ '{field}' attendu de type {ftype.__name__}, "
                     f"reçu {type(item[field]).__name__}"
@@ -41,13 +46,13 @@ def parse_payload(raw: str) -> list[dict[str, Any]]:
 
 def save_athletes(athletes: list[dict[str, Any]], target: Path) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(athletes, ensure_ascii=False, indent=2))
+    target.write_text(json.dumps(athletes, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def load_athletes(source: Path) -> list[dict[str, Any]]:
     if not source.exists():
         raise FileNotFoundError(source)
-    return parse_payload(source.read_text())
+    return parse_payload(source.read_text(encoding="utf-8"))
 
 
 def read_from_clipboard() -> str:
@@ -63,7 +68,10 @@ def read_from_clipboard() -> str:
 def read_via_editor(scratch: Path) -> str:
     scratch.parent.mkdir(parents=True, exist_ok=True)
     if not scratch.exists():
-        scratch.write_text("[]")
+        scratch.write_text("[]", encoding="utf-8")
     editor = os.environ.get("EDITOR", "vim")
-    subprocess.run([editor, str(scratch)], check=True)
-    return scratch.read_text()
+    try:
+        subprocess.run(shlex.split(editor) + [str(scratch)], check=True)
+    except subprocess.CalledProcessError as e:
+        raise EditorAborted(f"Éditeur '{editor}' a quitté avec le code {e.returncode}") from e
+    return scratch.read_text(encoding="utf-8")
