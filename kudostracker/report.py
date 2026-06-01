@@ -9,8 +9,8 @@ def _env() -> Environment:
     return Environment(
         loader=PackageLoader("kudostracker", "templates"),
         autoescape=select_autoescape(default=False),
-        trim_blocks=False,
-        lstrip_blocks=False,
+        trim_blocks=True,
+        lstrip_blocks=True,
     )
 
 

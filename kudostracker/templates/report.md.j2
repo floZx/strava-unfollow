@@ -8,7 +8,7 @@ Période analysée : {{ window_start }} → {{ window_end }} ({{ activity_count 
 | Abonné | Kudos donnés | Ratio | Profil |
 |--------|--------------|-------|--------|
 {% for row in low_kudos_rows -%}
-| {{ row.name }} | {{ row.count }} / {{ activity_count }} | {{ row.ratio_pct }}% | [profil]({{ row.url }}) |
+| {{ row.name | replace("|", "\\|") }} | {{ row.count }} / {{ activity_count }} | {{ row.ratio_pct }}% | [profil]({{ row.url }}) |
 {% endfor %}
 {% else %}
 _Aucun abonné chargé. Lance `kudostracker paste followers`._
@@ -18,7 +18,7 @@ _Aucun abonné chargé. Lance `kudostracker paste followers`._
 
 {% if non_mutuals %}
 {% for a in non_mutuals -%}
-- [{{ a.name }}]({{ a.url }})
+- [{{ a.name | replace("|", "\\|") }}]({{ a.url }})
 {% endfor %}
 {% else %}
 _Aucun abonnement chargé, ou tous tes abonnements te suivent en retour._

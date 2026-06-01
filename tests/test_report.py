@@ -78,3 +78,28 @@ def test_render_report_empty_followers_shows_hint():
         non_mutuals=[],
     )
     assert "paste followers" in rendered
+
+
+def test_write_report_creates_parents_and_encodes_utf8(tmp_path):
+    p = tmp_path / "nested" / "dir" / "report.md"
+    report.write_report("Résultat : é à ü", p)
+    assert p.read_bytes() == "Résultat : é à ü".encode("utf-8")
+
+
+def test_render_report_escapes_pipes_in_names():
+    rendered = report.render_report(
+        generated_on=date(2026, 6, 1),
+        window_start=date(2025, 6, 1),
+        window_end=date(2026, 6, 1),
+        activity_count=10,
+        low_kudos_rows=[
+            {"name": "Alice | Triathlete", "url": "https://strava.com/athletes/1",
+             "count": 0, "ratio_pct": 0.0},
+        ],
+        non_mutuals=[
+            {"id": 2, "name": "Bob | Runner", "url": "https://strava.com/athletes/2"},
+        ],
+    )
+    # The literal `\|` (backslash-pipe) must appear in the rendered output
+    assert r"Alice \| Triathlete" in rendered
+    assert r"Bob \| Runner" in rendered
