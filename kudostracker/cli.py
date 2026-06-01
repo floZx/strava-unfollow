@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import stravalib
+import stravalib.exc
 
 from kudostracker import auth, follower_io, paths, report, sync
 from kudostracker.storage import Storage
@@ -78,7 +79,10 @@ def _cmd_paste(args) -> int:
 
 def _resolve_since(arg: str | None) -> datetime:
     if arg:
-        return datetime.fromisoformat(arg).replace(tzinfo=timezone.utc)
+        parsed = datetime.fromisoformat(arg)
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
     return datetime.now(tz=timezone.utc) - timedelta(days=365)
 
 
@@ -102,7 +106,11 @@ def _cmd_sync(args) -> int:
         print(f"! {e}", file=sys.stderr)
         return 2
 
-    since = _resolve_since(args.since)
+    try:
+        since = _resolve_since(args.since)
+    except ValueError as e:
+        print(f"! --since invalide ({args.since}) : {e}", file=sys.stderr)
+        return 1
     storage = Storage(paths.db_file())
     storage.init_schema()
     try:
@@ -113,6 +121,12 @@ def _cmd_sync(args) -> int:
     except sync.SyncAborted as e:
         print(f"! {e}\n  Retry later, progress is saved.", file=sys.stderr)
         return 3
+    except stravalib.exc.AccessUnauthorized:
+        print(
+            "! Token Strava révoqué ou expiré. Relance `kudostracker auth`.",
+            file=sys.stderr,
+        )
+        return 2
     finally:
         storage.close()
     return 0
@@ -146,7 +160,11 @@ def _cmd_report(args) -> int:
     finally:
         storage.close()
 
-    since = _resolve_since(args.since)
+    try:
+        since = _resolve_since(args.since)
+    except ValueError as e:
+        print(f"! --since invalide ({args.since}) : {e}", file=sys.stderr)
+        return 1
     rows = report.compute_low_kudos_rows(followers, counts, activity_count)
     non_mutuals = report.compute_non_mutuals(following, followers)
     content = report.render_report(

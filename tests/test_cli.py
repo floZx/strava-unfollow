@@ -147,3 +147,99 @@ def test_sync_refreshes_expired_tokens(tmp_path, monkeypatch, mocker):
     rc = cli.main(["sync"])
     assert rc == 0
     mock_client_cls.assert_called_once_with(access_token="NEW")
+
+
+def test_sync_missing_tokens_returns_nonzero(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("KUDOSTRACKER_DATA_DIR", str(tmp_path))
+    rc = cli.main(["sync"])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "auth" in err.lower()
+
+
+def test_sync_returns_3_on_sync_aborted(tmp_path, monkeypatch, mocker):
+    monkeypatch.setenv("KUDOSTRACKER_DATA_DIR", str(tmp_path))
+    import time as _time
+    from kudostracker.auth import save_tokens
+    save_tokens(
+        tmp_path / "tokens.json",
+        access_token="A", refresh_token="R",
+        expires_at=int(_time.time()) + 3600,
+        client_id=1, client_secret="S",
+    )
+    mocker.patch("kudostracker.cli.stravalib.Client")
+    mocker.patch(
+        "kudostracker.cli.sync.sync_activities",
+        side_effect=cli.sync.SyncAborted("rate limit"),
+    )
+    rc = cli.main(["sync"])
+    assert rc == 3
+
+
+def test_report_missing_following_returns_nonzero(tmp_path, monkeypatch, capsys):
+    import json
+    monkeypatch.setenv("KUDOSTRACKER_DATA_DIR", str(tmp_path))
+    (tmp_path / "followers.json").write_text(json.dumps([]))
+    rc = cli.main(["report"])
+    assert rc != 0
+    err = capsys.readouterr().err
+    assert "paste following" in err
+
+
+def test_auth_missing_credentials_returns_2(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("KUDOSTRACKER_DATA_DIR", str(tmp_path))
+    monkeypatch.delenv("STRAVA_CLIENT_ID", raising=False)
+    monkeypatch.delenv("STRAVA_CLIENT_SECRET", raising=False)
+    rc = cli.main(["auth"])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "client" in err.lower()
+
+
+def test_resolve_since_converts_tzaware_to_utc():
+    from datetime import datetime, timezone
+    result = cli._resolve_since("2026-01-01T12:00:00+02:00")
+    # 12:00 +02:00 = 10:00 UTC
+    assert result == datetime(2026, 1, 1, 10, 0, 0, tzinfo=timezone.utc)
+
+
+def test_resolve_since_bare_date_assumed_utc():
+    from datetime import datetime, timezone
+    result = cli._resolve_since("2026-01-01")
+    assert result == datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+
+
+def test_sync_returns_2_on_access_unauthorized(tmp_path, monkeypatch, mocker):
+    monkeypatch.setenv("KUDOSTRACKER_DATA_DIR", str(tmp_path))
+    import time as _time
+    from kudostracker.auth import save_tokens
+    save_tokens(
+        tmp_path / "tokens.json",
+        access_token="A", refresh_token="R",
+        expires_at=int(_time.time()) + 3600,
+        client_id=1, client_secret="S",
+    )
+    mocker.patch("kudostracker.cli.stravalib.Client")
+    import stravalib.exc as exc
+    mocker.patch(
+        "kudostracker.cli.sync.sync_activities",
+        side_effect=exc.AccessUnauthorized("revoked"),
+    )
+    rc = cli.main(["sync"])
+    assert rc == 2
+
+
+def test_sync_bad_since_returns_1(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("KUDOSTRACKER_DATA_DIR", str(tmp_path))
+    import time as _time
+    from kudostracker.auth import save_tokens
+    save_tokens(
+        tmp_path / "tokens.json",
+        access_token="A", refresh_token="R",
+        expires_at=int(_time.time()) + 3600,
+        client_id=1, client_secret="S",
+    )
+    rc = cli.main(["sync", "--since", "not-a-date"])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "since" in err.lower()
