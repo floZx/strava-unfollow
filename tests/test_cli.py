@@ -243,3 +243,20 @@ def test_sync_bad_since_returns_1(tmp_path, monkeypatch, capsys):
     assert rc == 1
     err = capsys.readouterr().err
     assert "since" in err.lower()
+
+
+def test_paste_returns_nonzero_on_editor_abort(tmp_path, monkeypatch, mocker, capsys):
+    monkeypatch.setenv("KUDOSTRACKER_DATA_DIR", str(tmp_path))
+    from kudostracker.follower_io import ClipboardUnavailable, EditorAborted
+    mocker.patch(
+        "kudostracker.cli.follower_io.read_from_clipboard",
+        side_effect=ClipboardUnavailable("nope"),
+    )
+    mocker.patch(
+        "kudostracker.cli.follower_io.read_via_editor",
+        side_effect=EditorAborted("user aborted"),
+    )
+    rc = cli.main(["paste", "followers"])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "aborted" in err

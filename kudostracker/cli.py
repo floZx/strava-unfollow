@@ -64,7 +64,11 @@ def _cmd_paste(args) -> int:
         raw = follower_io.read_from_clipboard()
     except follower_io.ClipboardUnavailable as e:
         print(f"! {e}\n  Fallback: opening {target} in $EDITOR.", file=sys.stderr)
-        raw = follower_io.read_via_editor(target)
+        try:
+            raw = follower_io.read_via_editor(target)
+        except follower_io.EditorAborted as ea:
+            print(f"! {ea}", file=sys.stderr)
+            return 1
 
     try:
         athletes = follower_io.parse_payload(raw)
