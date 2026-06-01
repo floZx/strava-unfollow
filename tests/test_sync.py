@@ -107,15 +107,15 @@ def test_sync_kudoers_retries_on_rate_limit(storage, mocker):
     mock_sleep.assert_called_once_with(2.0)
 
 
-def test_sync_kudoers_gives_up_after_max_retries(storage, mocker):
+def test_sync_kudoers_skips_activity_after_max_retries(storage, mocker):
     storage.upsert_activity(1, "2026-01-01T10:00:00Z", "A")
     import stravalib.exc as exc
     client = mocker.MagicMock()
     client.get_activity_kudos.side_effect = exc.RateLimitExceeded("hit")
     mocker.patch("kudostracker.sync.time.sleep")
 
-    with pytest.raises(sync.SyncAborted):
-        sync.sync_kudoers(client, storage)
+    n = sync.sync_kudoers(client, storage)
+    assert n == 0
     # Activity remains unsynced
     assert len(storage.activities_needing_kudos_sync()) == 1
 
@@ -165,13 +165,49 @@ def test_sync_kudoers_treats_fault_429_as_rate_limit(storage, mocker):
     assert rows[0]["firstname"] == "Jean"
 
 
-def test_sync_kudoers_propagates_non_rate_fault(storage, mocker):
+def test_sync_kudoers_propagates_non_retryable_fault(storage, mocker):
     storage.upsert_activity(1, "2026-01-01T10:00:00Z", "A")
     import stravalib.exc as exc
     from types import SimpleNamespace
     client = mocker.MagicMock()
-    other_fault = exc.Fault("500 Server Error", response=SimpleNamespace(status_code=500))
-    client.get_activity_kudos.side_effect = other_fault
+    auth_fault = exc.Fault("401 Unauthorized", response=SimpleNamespace(status_code=401))
+    client.get_activity_kudos.side_effect = auth_fault
     mocker.patch("kudostracker.sync.time.sleep")
     with pytest.raises(exc.Fault):
         sync.sync_kudoers(client, storage)
+
+
+def test_sync_kudoers_treats_fault_500_as_retryable(storage, mocker):
+    storage.upsert_activity(1, "2026-01-01T10:00:00Z", "A")
+    import stravalib.exc as exc
+    from types import SimpleNamespace
+    client = mocker.MagicMock()
+    server_err = exc.Fault("500", response=SimpleNamespace(status_code=500))
+    client.get_activity_kudos.side_effect = [
+        server_err,
+        iter([make_athlete(None, "Jean", "Dupont")]),
+    ]
+    mocker.patch("kudostracker.sync.time.sleep")
+    n = sync.sync_kudoers(client, storage)
+    assert n == 1
+    assert client.get_activity_kudos.call_count == 2
+
+
+def test_sync_kudoers_skips_failing_activity_and_continues(storage, mocker, capsys):
+    storage.upsert_activity(1, "2026-01-01T10:00:00Z", "A")
+    storage.upsert_activity(2, "2026-01-02T10:00:00Z", "B")
+    import stravalib.exc as exc
+    from types import SimpleNamespace
+    client = mocker.MagicMock()
+    server_err = exc.Fault("500", response=SimpleNamespace(status_code=500))
+    client.get_activity_kudos.side_effect = [
+        server_err, server_err, server_err,  # activity 1: 3 retries all fail
+        iter([make_athlete(None, "Marie", "M.")]),  # activity 2: success
+    ]
+    mocker.patch("kudostracker.sync.time.sleep")
+    n = sync.sync_kudoers(client, storage)
+    assert n == 1  # only activity 2 was synced
+    pending_after = storage.activities_needing_kudos_sync()
+    assert {a["id"] for a in pending_after} == {1}
+    err = capsys.readouterr().out
+    assert "1" in err  # activity 1 mentioned in output
