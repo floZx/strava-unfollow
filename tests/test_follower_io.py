@@ -125,3 +125,46 @@ def test_parse_rejects_bool_as_id():
     bad = json.dumps([{"id": True, "name": "x", "url": "y"}])
     with pytest.raises(follower_io.InvalidPayload):
         follower_io.parse_payload(bad)
+
+
+def test_merge_athletes_creates_file_when_absent(tmp_path):
+    target = tmp_path / "followers.json"
+    new = [
+        {"id": 1, "name": "A", "url": "https://strava.com/athletes/1"},
+        {"id": 2, "name": "B", "url": "https://strava.com/athletes/2"},
+    ]
+    added, total = follower_io.merge_athletes(new, target)
+    assert added == 2
+    assert total == 2
+    assert json.loads(target.read_text(encoding="utf-8")) == new
+
+
+def test_merge_athletes_dedups_by_id(tmp_path):
+    target = tmp_path / "followers.json"
+    follower_io.save_athletes(
+        [{"id": 1, "name": "A", "url": "u1"}, {"id": 2, "name": "B", "url": "u2"}],
+        target,
+    )
+    new = [
+        {"id": 2, "name": "B", "url": "u2"},  # dupe
+        {"id": 3, "name": "C", "url": "u3"},  # new
+    ]
+    added, total = follower_io.merge_athletes(new, target)
+    assert added == 1
+    assert total == 3
+    loaded = json.loads(target.read_text(encoding="utf-8"))
+    assert {a["id"] for a in loaded} == {1, 2, 3}
+
+
+def test_merge_athletes_updates_name_on_conflict(tmp_path):
+    target = tmp_path / "followers.json"
+    follower_io.save_athletes(
+        [{"id": 1, "name": "Old", "url": "u1"}],
+        target,
+    )
+    new = [{"id": 1, "name": "New", "url": "u1"}]
+    added, total = follower_io.merge_athletes(new, target)
+    assert added == 0
+    assert total == 1
+    loaded = json.loads(target.read_text(encoding="utf-8"))
+    assert loaded[0]["name"] == "New"

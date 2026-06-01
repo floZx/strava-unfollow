@@ -76,8 +76,8 @@ def _cmd_paste(args) -> int:
         print(f"Erreur de validation JSON : {e}", file=sys.stderr)
         return 1
 
-    follower_io.save_athletes(athletes, target)
-    print(f"{len(athletes)} athletes loaded into {target}")
+    added, total = follower_io.merge_athletes(athletes, target)
+    print(f"✓ {added} ajoutés ({total} au total dans {target})")
     return 0
 
 

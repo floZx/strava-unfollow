@@ -49,6 +49,26 @@ def save_athletes(athletes: list[dict[str, Any]], target: Path) -> None:
     target.write_text(json.dumps(athletes, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def merge_athletes(new_list: list[dict[str, Any]], target: Path) -> tuple[int, int]:
+    """Merge new_list into the JSON at target, dedup by id.
+
+    Returns (added_count, total_count). If target doesn't exist, all of
+    new_list is added.
+    """
+    existing: list[dict[str, Any]] = []
+    if target.exists():
+        existing = load_athletes(target)
+    by_id = {a["id"]: a for a in existing}
+    added = 0
+    for a in new_list:
+        if a["id"] not in by_id:
+            added += 1
+        by_id[a["id"]] = a  # later wins on dupes (updated name etc.)
+    merged = list(by_id.values())
+    save_athletes(merged, target)
+    return added, len(merged)
+
+
 def load_athletes(source: Path) -> list[dict[str, Any]]:
     if not source.exists():
         raise FileNotFoundError(source)

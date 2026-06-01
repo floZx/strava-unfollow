@@ -260,3 +260,28 @@ def test_paste_returns_nonzero_on_editor_abort(tmp_path, monkeypatch, mocker, ca
     assert rc == 1
     err = capsys.readouterr().err
     assert "aborted" in err
+
+
+def test_paste_merges_across_invocations(tmp_path, monkeypatch, mocker):
+    import json
+    monkeypatch.setenv("KUDOSTRACKER_DATA_DIR", str(tmp_path))
+    # First paste — page 1
+    page1 = json.dumps([
+        {"id": 1, "name": "A", "url": "https://strava.com/athletes/1"},
+        {"id": 2, "name": "B", "url": "https://strava.com/athletes/2"},
+    ])
+    mocker.patch("kudostracker.cli.follower_io.read_from_clipboard", return_value=page1)
+    rc = cli.main(["paste", "followers"])
+    assert rc == 0
+
+    # Second paste — page 2 with one dupe and one new
+    page2 = json.dumps([
+        {"id": 2, "name": "B", "url": "https://strava.com/athletes/2"},  # dupe
+        {"id": 3, "name": "C", "url": "https://strava.com/athletes/3"},  # new
+    ])
+    mocker.patch("kudostracker.cli.follower_io.read_from_clipboard", return_value=page2)
+    rc = cli.main(["paste", "followers"])
+    assert rc == 0
+
+    saved = json.loads((tmp_path / "followers.json").read_text())
+    assert {a["id"] for a in saved} == {1, 2, 3}

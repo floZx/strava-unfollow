@@ -53,6 +53,8 @@ The Strava API doesn't expose your follower lists, so the export is manual:
 5. Run `kudostracker paste followers` in your terminal.
 6. Repeat steps 1–5 with `?type=following` and `kudostracker paste following`.
 
+You can paste multiple times — each paste merges by athlete ID, so you can scroll a page, paste, scroll the next, paste again, until you've covered the full list.
+
 If clipboard access fails (Linux without xclip), the tool falls back to opening the target file in `$EDITOR`.
 
 ## Output
