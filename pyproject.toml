@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kudostracker"
+version = "0.1.0"
+description = "Identify Strava followers who never give kudos and accounts you follow that don't follow back"
+requires-python = ">=3.11"
+dependencies = [
+  "stravalib>=2.0",
+  "pyperclip>=1.8",
+  "jinja2>=3.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-mock>=3.12",
+]
+
+[project.scripts]
+kudostracker = "kudostracker.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["kudostracker*"]
+
+[tool.setuptools.package-data]
+kudostracker = ["templates/*.j2"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
