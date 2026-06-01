@@ -1,0 +1,25 @@
+# Rapport Strava — {{ generated_on }}
+
+Période analysée : {{ window_start }} → {{ window_end }} ({{ activity_count }} activités)
+
+## Abonnés qui ne te kudosent (presque) jamais
+
+{% if low_kudos_rows %}
+| Abonné | Kudos donnés | Ratio | Profil |
+|--------|--------------|-------|--------|
+{% for row in low_kudos_rows -%}
+| {{ row.name }} | {{ row.count }} / {{ activity_count }} | {{ row.ratio_pct }}% | [profil]({{ row.url }}) |
+{% endfor %}
+{% else %}
+_Aucun abonné chargé. Lance `kudostracker paste followers`._
+{% endif %}
+
+## Comptes que tu suis qui ne te suivent pas en retour
+
+{% if non_mutuals %}
+{% for a in non_mutuals -%}
+- [{{ a.name }}]({{ a.url }})
+{% endfor %}
+{% else %}
+_Aucun abonnement chargé, ou tous tes abonnements te suivent en retour._
+{% endif %}
