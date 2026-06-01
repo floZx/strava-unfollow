@@ -95,11 +95,12 @@ def test_sync_kudoers_retries_on_rate_limit(storage, mocker):
         rate_err,
         iter([make_athlete(100, "Jean", "Dupont")]),
     ]
-    mocker.patch("kudostracker.sync.time.sleep")
+    mock_sleep = mocker.patch("kudostracker.sync.time.sleep")
 
     sync.sync_kudoers(client, storage)
     assert client.get_activity_kudos.call_count == 2
     assert storage.kudos_count_per_athlete() == {100: 1}
+    mock_sleep.assert_called_once_with(2.0)
 
 
 def test_sync_kudoers_gives_up_after_max_retries(storage, mocker):
@@ -113,3 +114,28 @@ def test_sync_kudoers_gives_up_after_max_retries(storage, mocker):
         sync.sync_kudoers(client, storage)
     # Activity remains unsynced
     assert len(storage.activities_needing_kudos_sync()) == 1
+
+
+def test_sync_activities_skips_none_start_date(storage, mocker, capsys):
+    client = mocker.MagicMock()
+    bad = SimpleNamespace(id=42, start_date=None, name="weird")
+    good = make_activity(43, "2026-01-02T10:00:00Z", "ok")
+    client.get_activities.return_value = iter([bad, good])
+    since = datetime(2025, 6, 1, tzinfo=timezone.utc)
+    n = sync.sync_activities(client, storage, since=since)
+    assert n == 1
+    assert {a["id"] for a in storage.all_activities()} == {43}
+    captured = capsys.readouterr()
+    assert "42" in captured.out
+
+
+def test_sync_kudoers_skips_none_athlete_id(storage, mocker):
+    storage.upsert_activity(1, "2026-01-01T10:00:00Z", "A")
+    client = mocker.MagicMock()
+    client.get_activity_kudos.return_value = iter([
+        make_athlete(None, "Anon", "User"),
+        make_athlete(100, "Jean", "Dupont"),
+    ])
+    sync.sync_kudoers(client, storage)
+    rows = storage.kudoers_for_activity(1)
+    assert {r["athlete_id"] for r in rows} == {100}

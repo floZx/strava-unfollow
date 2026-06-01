@@ -19,6 +19,9 @@ class SyncAborted(RuntimeError):
 def sync_activities(client: stravalib.Client, storage: Storage, since: datetime) -> int:
     n = 0
     for a in client.get_activities(after=since):
+        if a.start_date is None:
+            print(f"! Activité {a.id} ignorée (start_date manquant)")
+            continue
         storage.upsert_activity(
             activity_id=a.id,
             start_date=a.start_date.isoformat(),
@@ -47,6 +50,8 @@ def sync_kudoers(client: stravalib.Client, storage: Storage) -> int:
     for activity in pending:
         kudoers = _fetch_kudoers_with_retry(client, activity["id"])
         for k in kudoers:
+            if k.id is None:
+                continue
             storage.insert_kudoer(
                 activity_id=activity["id"],
                 athlete_id=k.id,
