@@ -139,3 +139,32 @@ def test_sync_kudoers_skips_none_athlete_id(storage, mocker):
     sync.sync_kudoers(client, storage)
     rows = storage.kudoers_for_activity(1)
     assert {r["athlete_id"] for r in rows} == {100}
+
+
+def test_sync_kudoers_treats_fault_429_as_rate_limit(storage, mocker):
+    storage.upsert_activity(1, "2026-01-01T10:00:00Z", "A")
+
+    import stravalib.exc as exc
+    from types import SimpleNamespace
+    client = mocker.MagicMock()
+    fault_429 = exc.Fault("429 Too Many", response=SimpleNamespace(status_code=429))
+    client.get_activity_kudos.side_effect = [
+        fault_429,
+        iter([make_athlete(100, "Jean", "Dupont")]),
+    ]
+    mocker.patch("kudostracker.sync.time.sleep")
+    sync.sync_kudoers(client, storage)
+    assert client.get_activity_kudos.call_count == 2
+    assert storage.kudos_count_per_athlete() == {100: 1}
+
+
+def test_sync_kudoers_propagates_non_rate_fault(storage, mocker):
+    storage.upsert_activity(1, "2026-01-01T10:00:00Z", "A")
+    import stravalib.exc as exc
+    from types import SimpleNamespace
+    client = mocker.MagicMock()
+    other_fault = exc.Fault("500 Server Error", response=SimpleNamespace(status_code=500))
+    client.get_activity_kudos.side_effect = other_fault
+    mocker.patch("kudostracker.sync.time.sleep")
+    with pytest.raises(exc.Fault):
+        sync.sync_kudoers(client, storage)

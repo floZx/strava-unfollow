@@ -31,15 +31,26 @@ def sync_activities(client: stravalib.Client, storage: Storage, since: datetime)
     return n
 
 
+def _is_rate_limit(exc: Exception) -> bool:
+    if isinstance(exc, stravalib.exc.RateLimitExceeded):
+        return True
+    if isinstance(exc, stravalib.exc.Fault):
+        response = getattr(exc, "response", None)
+        return response is not None and response.status_code == 429
+    return False
+
+
 def _fetch_kudoers_with_retry(client: stravalib.Client, activity_id: int) -> list[Any]:
     for attempt in range(MAX_RETRIES):
         try:
             return list(client.get_activity_kudos(activity_id))
-        except stravalib.exc.RateLimitExceeded:
+        except (stravalib.exc.Fault, stravalib.exc.RateLimitExceeded) as e:
+            if not _is_rate_limit(e):
+                raise
             if attempt == MAX_RETRIES - 1:
                 raise SyncAborted(
                     f"Rate limit hit on activity {activity_id} after {MAX_RETRIES} retries"
-                )
+                ) from e
             time.sleep(BASE_BACKOFF * (2**attempt))
     raise SyncAborted("unreachable")
 
