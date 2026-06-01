@@ -1,8 +1,11 @@
+from collections import Counter, defaultdict
 from datetime import date
 from pathlib import Path
 from typing import Any
 
 from jinja2 import Environment, PackageLoader, select_autoescape
+
+from kudostracker.matching import normalize_follower, normalize_kudoer
 
 
 def _env() -> Environment:
@@ -16,19 +19,30 @@ def _env() -> Environment:
 
 def compute_low_kudos_rows(
     followers: list[dict[str, Any]],
-    counts: dict[int, int],
+    kudoer_rows: list[Any],  # sqlite3.Row or dict with activity_id, firstname, lastname
     activity_count: int,
 ) -> list[dict[str, Any]]:
+    # Map (first, initial) -> set of activity_ids where someone with that name kudoed
+    activities_by_name: dict[tuple[str, str], set[int]] = defaultdict(set)
+    for kr in kudoer_rows:
+        key = normalize_kudoer(kr["firstname"], kr["lastname"])
+        activities_by_name[key].add(kr["activity_id"])
+    # Count how many followers share each normalized name (ambiguity detection)
+    follower_keys = {f["id"]: normalize_follower(f["name"]) for f in followers}
+    key_counter = Counter(follower_keys.values())
+
     rows = []
     for f in followers:
-        c = counts.get(f["id"], 0)
-        ratio = (c / activity_count * 100) if activity_count > 0 else 0.0
+        key = follower_keys[f["id"]]
+        kudosed_count = len(activities_by_name.get(key, set()))
+        ratio = (kudosed_count / activity_count * 100) if activity_count > 0 else 0.0
         rows.append(
             {
                 "name": f["name"],
                 "url": f["url"],
-                "count": c,
+                "count": kudosed_count,
                 "ratio_pct": round(ratio, 1),
+                "ambiguous": key_counter[key] > 1,
             }
         )
     rows.sort(key=lambda r: (r["count"], r["name"].lower()))

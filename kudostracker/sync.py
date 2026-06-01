@@ -61,13 +61,10 @@ def sync_kudoers(client: stravalib.Client, storage: Storage) -> int:
     for activity in pending:
         kudoers = _fetch_kudoers_with_retry(client, activity["id"])
         for k in kudoers:
-            if k.id is None:
-                continue
             storage.insert_kudoer(
                 activity_id=activity["id"],
-                athlete_id=k.id,
-                firstname=getattr(k, "firstname", None),
-                lastname=getattr(k, "lastname", None),
+                firstname=getattr(k, "firstname", None) or "",
+                lastname=getattr(k, "lastname", None) or "",
             )
         storage.mark_kudos_synced(activity["id"])
         synced += 1

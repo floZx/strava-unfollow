@@ -5,11 +5,13 @@ Période analysée : {{ window_start }} → {{ window_end }} ({{ activity_count 
 ## Abonnés qui ne te kudosent (presque) jamais
 
 {% if low_kudos_rows %}
-| Abonné | Kudos donnés | Ratio | Profil |
-|--------|--------------|-------|--------|
+| Abonné | Kudos donnés | Ratio | Ambigu | Profil |
+|--------|--------------|-------|--------|--------|
 {% for row in low_kudos_rows -%}
-| {{ row.name | replace("|", "\\|") }} | {{ row.count }} / {{ activity_count }} | {{ row.ratio_pct }}% | [profil]({{ row.url }}) |
+| {{ row.name | replace("|", "\\|") }} | {{ row.count }} / {{ activity_count }} | {{ row.ratio_pct }}% | {% if row.ambiguous %}⚠{% else %}{% endif %} | [profil]({{ row.url }}) |
 {% endfor %}
+
+> ⚠ : plusieurs abonnés ont des noms qui se normalisent en (prénom, initiale) identiques. Le décompte est partagé entre eux.
 {% else %}
 _Aucun abonné chargé. Lance `kudostracker paste followers`._
 {% endif %}

@@ -12,14 +12,11 @@ CREATE TABLE IF NOT EXISTS activities (
 
 CREATE TABLE IF NOT EXISTS kudoers (
   activity_id  INTEGER NOT NULL,
-  athlete_id   INTEGER NOT NULL,
-  firstname    TEXT,
-  lastname     TEXT,
-  PRIMARY KEY (activity_id, athlete_id),
+  firstname    TEXT NOT NULL,
+  lastname     TEXT NOT NULL,
+  PRIMARY KEY (activity_id, firstname, lastname),
   FOREIGN KEY (activity_id) REFERENCES activities(id)
 );
-
-CREATE INDEX IF NOT EXISTS idx_kudoers_athlete ON kudoers(athlete_id);
 """
 
 
@@ -56,16 +53,14 @@ class Storage:
         )
         self.conn.commit()
 
-    def insert_kudoer(
-        self, activity_id: int, athlete_id: int, firstname: str | None, lastname: str | None
-    ) -> None:
+    def insert_kudoer(self, activity_id: int, firstname: str, lastname: str) -> None:
         self.conn.execute(
             """
-            INSERT INTO kudoers (activity_id, athlete_id, firstname, lastname)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(activity_id, athlete_id) DO NOTHING
+            INSERT INTO kudoers (activity_id, firstname, lastname)
+            VALUES (?, ?, ?)
+            ON CONFLICT(activity_id, firstname, lastname) DO NOTHING
             """,
-            (activity_id, athlete_id, firstname, lastname),
+            (activity_id, firstname or "", lastname or ""),
         )
         self.conn.commit()
 
@@ -86,11 +81,8 @@ class Storage:
             )
         )
 
-    def kudos_count_per_athlete(self) -> dict[int, int]:
-        rows = self.conn.execute(
-            "SELECT athlete_id, COUNT(*) AS c FROM kudoers GROUP BY athlete_id"
-        )
-        return {r["athlete_id"]: r["c"] for r in rows}
+    def all_kudoers(self) -> list[sqlite3.Row]:
+        return list(self.conn.execute("SELECT activity_id, firstname, lastname FROM kudoers"))
 
     def activity_count(self) -> int:
         row = self.conn.execute("SELECT COUNT(*) AS c FROM activities").fetchone()

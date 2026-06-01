@@ -36,31 +36,37 @@ def test_activities_needing_kudos_sync(storage):
 
 def test_insert_kudoer_then_mark_synced(storage):
     storage.upsert_activity(1, "2026-01-01T10:00:00Z", "A")
-    storage.insert_kudoer(activity_id=1, athlete_id=100, firstname="Jean", lastname="Dupont")
-    storage.insert_kudoer(activity_id=1, athlete_id=101, firstname="Marie", lastname="Martin")
+    storage.insert_kudoer(activity_id=1, firstname="Jean", lastname="D.")
+    storage.insert_kudoer(activity_id=1, firstname="Marie", lastname="M.")
     storage.mark_kudos_synced(1)
 
     rows = storage.kudoers_for_activity(1)
-    assert {r["athlete_id"] for r in rows} == {100, 101}
+    assert {r["firstname"] for r in rows} == {"Jean", "Marie"}
 
 
 def test_insert_kudoer_is_idempotent(storage):
     storage.upsert_activity(1, "2026-01-01T10:00:00Z", "A")
-    storage.insert_kudoer(1, 100, "Jean", "Dupont")
-    storage.insert_kudoer(1, 100, "Jean", "Dupont")  # duplicate
+    storage.insert_kudoer(1, "Jean", "D.")
+    storage.insert_kudoer(1, "Jean", "D.")  # duplicate
     rows = storage.kudoers_for_activity(1)
     assert len(rows) == 1
 
 
-def test_kudos_count_per_athlete(storage):
+def test_kudoers_for_activity_returns_empty_for_unknown(storage):
+    rows = storage.kudoers_for_activity(999)
+    assert rows == []
+
+
+def test_all_kudoers_returns_all_rows(storage):
     storage.upsert_activity(1, "2026-01-01T10:00:00Z", "A")
     storage.upsert_activity(2, "2026-01-02T10:00:00Z", "B")
-    storage.upsert_activity(3, "2026-01-03T10:00:00Z", "C")
-    storage.insert_kudoer(1, 100, "Jean", "Dupont")
-    storage.insert_kudoer(2, 100, "Jean", "Dupont")
-    storage.insert_kudoer(2, 101, "Marie", "Martin")
-    counts = storage.kudos_count_per_athlete()
-    assert counts == {100: 2, 101: 1}
+    storage.insert_kudoer(1, "Jean", "D.")
+    storage.insert_kudoer(2, "Jean", "D.")
+    storage.insert_kudoer(2, "Marie", "M.")
+    rows = storage.all_kudoers()
+    assert len(rows) == 3
+    activity_ids = {r["activity_id"] for r in rows}
+    assert activity_ids == {1, 2}
 
 
 def test_activity_count(storage):

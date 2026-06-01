@@ -16,9 +16,21 @@ FOLLOWING = [
 ]
 
 
+def _kudoer_rows(*entries):
+    """Build a list of dicts simulating sqlite3.Row for kudoer data.
+
+    Each entry is (activity_id, firstname, lastname).
+    """
+    return [{"activity_id": a, "firstname": f, "lastname": l} for a, f, l in entries]
+
+
 def test_compute_low_kudos_rows_sorted_ascending():
-    counts = {100: 5, 101: 0, 102: 2}
-    rows = report.compute_low_kudos_rows(FOLLOWERS, counts, activity_count=10)
+    # Jean kudoed 5 activities (acts 1-5), Paul kudoed 2 (acts 1-2), Marie 0
+    kudoer_rows = _kudoer_rows(
+        *[(i, "Jean", "D.") for i in range(1, 6)],
+        *[(i, "Paul", "D.") for i in range(1, 3)],
+    )
+    rows = report.compute_low_kudos_rows(FOLLOWERS, kudoer_rows, activity_count=10)
     # 0 < 2 < 5 → Marie, Paul, Jean
     assert [r["name"] for r in rows] == ["Marie Martin", "Paul Durand", "Jean Dupont"]
     assert rows[0]["count"] == 0
@@ -28,16 +40,40 @@ def test_compute_low_kudos_rows_sorted_ascending():
 
 def test_compute_low_kudos_handles_missing_athlete():
     # follower with no kudoers row at all = 0 kudos
-    counts = {}
-    rows = report.compute_low_kudos_rows(FOLLOWERS, counts, activity_count=10)
+    rows = report.compute_low_kudos_rows(FOLLOWERS, [], activity_count=10)
     assert all(r["count"] == 0 for r in rows)
 
 
 def test_compute_low_kudos_zero_activities():
-    counts = {}
-    rows = report.compute_low_kudos_rows(FOLLOWERS, counts, activity_count=0)
+    rows = report.compute_low_kudos_rows(FOLLOWERS, [], activity_count=0)
     # All ratios = 0% (no division by zero)
     assert all(r["ratio_pct"] == 0.0 for r in rows)
+
+
+def test_compute_low_kudos_ambiguous_flag():
+    # Two followers whose names normalise to the same (first, initial):
+    # "Jean Dupont" → ("jean", "d") and "Jean Dubois" → ("jean", "d")
+    followers_with_dup = [
+        {"id": 1, "name": "Jean Dupont", "url": "https://strava.com/athletes/1"},
+        {"id": 2, "name": "Jean Dubois", "url": "https://strava.com/athletes/2"},
+        {"id": 3, "name": "Marie Martin", "url": "https://strava.com/athletes/3"},
+    ]
+    kudoer_rows = _kudoer_rows((1, "Jean", "D."))
+    rows = report.compute_low_kudos_rows(followers_with_dup, kudoer_rows, activity_count=5)
+    by_name = {r["name"]: r for r in rows}
+    assert by_name["Jean Dupont"]["ambiguous"] is True
+    assert by_name["Jean Dubois"]["ambiguous"] is True
+    assert by_name["Marie Martin"]["ambiguous"] is False
+
+
+def test_compute_low_kudos_accent_insensitive_matching():
+    # Follower "François Dupont" should match kudoer ("Francois", "D.")
+    followers_fr = [
+        {"id": 1, "name": "François Dupont", "url": "https://strava.com/athletes/1"},
+    ]
+    kudoer_rows = _kudoer_rows((1, "Francois", "D."), (2, "Francois", "D."))
+    rows = report.compute_low_kudos_rows(followers_fr, kudoer_rows, activity_count=5)
+    assert rows[0]["count"] == 2
 
 
 def test_compute_non_mutuals():
@@ -53,12 +89,14 @@ def test_compute_non_mutuals_empty():
 
 
 def test_render_report_contains_sections():
+    # Jean (id=100) kudoed 5 distinct activities
+    kudoer_rows = _kudoer_rows(*[(i, "Jean", "D.") for i in range(1, 6)])
     rendered = report.render_report(
         generated_on=date(2026, 6, 1),
         window_start=date(2025, 6, 1),
         window_end=date(2026, 6, 1),
         activity_count=10,
-        low_kudos_rows=report.compute_low_kudos_rows(FOLLOWERS, {100: 5}, 10),
+        low_kudos_rows=report.compute_low_kudos_rows(FOLLOWERS, kudoer_rows, 10),
         non_mutuals=report.compute_non_mutuals(FOLLOWING, FOLLOWERS),
     )
     assert "## Abonnés qui ne te kudosent" in rendered
@@ -66,6 +104,7 @@ def test_render_report_contains_sections():
     assert "Marie Martin" in rendered
     assert "Lucas Petit" in rendered
     assert "2026-06-01" in rendered
+    assert "Ambigu" in rendered
 
 
 def test_render_report_empty_followers_shows_hint():
@@ -94,7 +133,7 @@ def test_render_report_escapes_pipes_in_names():
         activity_count=10,
         low_kudos_rows=[
             {"name": "Alice | Triathlete", "url": "https://strava.com/athletes/1",
-             "count": 0, "ratio_pct": 0.0},
+             "count": 0, "ratio_pct": 0.0, "ambiguous": False},
         ],
         non_mutuals=[
             {"id": 2, "name": "Bob | Runner", "url": "https://strava.com/athletes/2"},
