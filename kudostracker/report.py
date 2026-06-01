@@ -19,20 +19,24 @@ def _env() -> Environment:
 
 def compute_low_kudos_rows(
     followers: list[dict[str, Any]],
+    following: list[dict[str, Any]],
     kudoer_rows: list[Any],  # sqlite3.Row or dict with activity_id, firstname, lastname
     activity_count: int,
 ) -> list[dict[str, Any]]:
+    """Only mutuals (in both followers and following) are returned."""
+    following_ids = {a["id"] for a in following}
+    mutuals = [f for f in followers if f["id"] in following_ids]
     # Map (first, initial) -> set of activity_ids where someone with that name kudoed
     activities_by_name: dict[tuple[str, str], set[int]] = defaultdict(set)
     for kr in kudoer_rows:
         key = normalize_kudoer(kr["firstname"], kr["lastname"])
         activities_by_name[key].add(kr["activity_id"])
-    # Count how many followers share each normalized name (ambiguity detection)
-    follower_keys = {f["id"]: normalize_follower(f["name"]) for f in followers}
+    # Count how many mutuals share each normalized name (ambiguity detection)
+    follower_keys = {f["id"]: normalize_follower(f["name"]) for f in mutuals}
     key_counter = Counter(follower_keys.values())
 
     rows = []
-    for f in followers:
+    for f in mutuals:
         key = follower_keys[f["id"]]
         kudosed_count = len(activities_by_name.get(key, set()))
         ratio = (kudosed_count / activity_count * 100) if activity_count > 0 else 0.0

@@ -169,7 +169,7 @@ def _cmd_report(args) -> int:
     except ValueError as e:
         print(f"! --since invalide ({args.since}) : {e}", file=sys.stderr)
         return 1
-    rows = report.compute_low_kudos_rows(followers, kudoer_rows, activity_count)
+    rows = report.compute_low_kudos_rows(followers, following, kudoer_rows, activity_count)
     non_mutuals = report.compute_non_mutuals(following, followers)
     content = report.render_report(
         generated_on=date.today(),

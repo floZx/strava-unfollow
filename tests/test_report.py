@@ -26,11 +26,13 @@ def _kudoer_rows(*entries):
 
 def test_compute_low_kudos_rows_sorted_ascending():
     # Jean kudoed 5 activities (acts 1-5), Paul kudoed 2 (acts 1-2), Marie 0
+    # All 3 followers are also in following (all mutuals), so sort behaviour is preserved.
+    following_all = FOLLOWERS[:]  # same list → all are mutuals
     kudoer_rows = _kudoer_rows(
         *[(i, "Jean", "D.") for i in range(1, 6)],
         *[(i, "Paul", "D.") for i in range(1, 3)],
     )
-    rows = report.compute_low_kudos_rows(FOLLOWERS, kudoer_rows, activity_count=10)
+    rows = report.compute_low_kudos_rows(FOLLOWERS, following_all, kudoer_rows, activity_count=10)
     # 0 < 2 < 5 → Marie, Paul, Jean
     assert [r["name"] for r in rows] == ["Marie Martin", "Paul Durand", "Jean Dupont"]
     assert rows[0]["count"] == 0
@@ -40,14 +42,28 @@ def test_compute_low_kudos_rows_sorted_ascending():
 
 def test_compute_low_kudos_handles_missing_athlete():
     # follower with no kudoers row at all = 0 kudos
-    rows = report.compute_low_kudos_rows(FOLLOWERS, [], activity_count=10)
+    rows = report.compute_low_kudos_rows(FOLLOWERS, FOLLOWERS, [], activity_count=10)
     assert all(r["count"] == 0 for r in rows)
 
 
 def test_compute_low_kudos_zero_activities():
-    rows = report.compute_low_kudos_rows(FOLLOWERS, [], activity_count=0)
+    rows = report.compute_low_kudos_rows(FOLLOWERS, FOLLOWERS, [], activity_count=0)
     # All ratios = 0% (no division by zero)
     assert all(r["ratio_pct"] == 0.0 for r in rows)
+
+
+def test_compute_low_kudos_excludes_non_mutuals():
+    followers = [
+        {"id": 1, "name": "Mutual", "url": "https://strava.com/athletes/1"},
+        {"id": 2, "name": "Not Followed Back", "url": "https://strava.com/athletes/2"},
+    ]
+    following = [
+        {"id": 1, "name": "Mutual", "url": "https://strava.com/athletes/1"},
+    ]
+    kudoer_rows = []
+    rows = report.compute_low_kudos_rows(followers, following, kudoer_rows, activity_count=10)
+    assert len(rows) == 1
+    assert rows[0]["name"] == "Mutual"
 
 
 def test_compute_low_kudos_ambiguous_flag():
@@ -59,7 +75,7 @@ def test_compute_low_kudos_ambiguous_flag():
         {"id": 3, "name": "Marie Martin", "url": "https://strava.com/athletes/3"},
     ]
     kudoer_rows = _kudoer_rows((1, "Jean", "D."))
-    rows = report.compute_low_kudos_rows(followers_with_dup, kudoer_rows, activity_count=5)
+    rows = report.compute_low_kudos_rows(followers_with_dup, followers_with_dup, kudoer_rows, activity_count=5)
     by_name = {r["name"]: r for r in rows}
     assert by_name["Jean Dupont"]["ambiguous"] is True
     assert by_name["Jean Dubois"]["ambiguous"] is True
@@ -72,7 +88,7 @@ def test_compute_low_kudos_accent_insensitive_matching():
         {"id": 1, "name": "François Dupont", "url": "https://strava.com/athletes/1"},
     ]
     kudoer_rows = _kudoer_rows((1, "Francois", "D."), (2, "Francois", "D."))
-    rows = report.compute_low_kudos_rows(followers_fr, kudoer_rows, activity_count=5)
+    rows = report.compute_low_kudos_rows(followers_fr, followers_fr, kudoer_rows, activity_count=5)
     assert rows[0]["count"] == 2
 
 
@@ -90,16 +106,17 @@ def test_compute_non_mutuals_empty():
 
 def test_render_report_contains_sections():
     # Jean (id=100) kudoed 5 distinct activities
+    # FOLLOWERS has ids 100, 101, 102; use same list as following so all are mutuals
     kudoer_rows = _kudoer_rows(*[(i, "Jean", "D.") for i in range(1, 6)])
     rendered = report.render_report(
         generated_on=date(2026, 6, 1),
         window_start=date(2025, 6, 1),
         window_end=date(2026, 6, 1),
         activity_count=10,
-        low_kudos_rows=report.compute_low_kudos_rows(FOLLOWERS, kudoer_rows, 10),
+        low_kudos_rows=report.compute_low_kudos_rows(FOLLOWERS, FOLLOWERS, kudoer_rows, 10),
         non_mutuals=report.compute_non_mutuals(FOLLOWING, FOLLOWERS),
     )
-    assert "## Abonnés qui ne te kudosent" in rendered
+    assert "## Mutuels qui ne te kudosent" in rendered
     assert "## Comptes que tu suis qui ne te suivent pas en retour" in rendered
     assert "Marie Martin" in rendered
     assert "Lucas Petit" in rendered
