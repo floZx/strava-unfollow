@@ -19,6 +19,7 @@ def test_named_paths(monkeypatch, tmp_path):
     assert paths.followers_file() == tmp_path / "followers.json"
     assert paths.following_file() == tmp_path / "following.json"
     assert paths.report_file() == tmp_path / "report.md"
+    assert paths.report_html_file() == tmp_path / "report.html"
 
 
 def test_ensure_data_dir_creates_folder(monkeypatch, tmp_path):

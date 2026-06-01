@@ -17,6 +17,15 @@ def _env() -> Environment:
     )
 
 
+def _env_html() -> Environment:
+    return Environment(
+        loader=PackageLoader("kudostracker", "templates"),
+        autoescape=True,
+        trim_blocks=True,
+        lstrip_blocks=True,
+    )
+
+
 def compute_low_kudos_rows(
     followers: list[dict[str, Any]],
     following: list[dict[str, Any]],
@@ -73,6 +82,26 @@ def render_report(
     non_mutuals: list[dict[str, Any]],
 ) -> str:
     template = _env().get_template("report.md.j2")
+    return template.render(
+        generated_on=generated_on.isoformat(),
+        window_start=window_start.isoformat(),
+        window_end=window_end.isoformat(),
+        activity_count=activity_count,
+        low_kudos_rows=low_kudos_rows,
+        non_mutuals=non_mutuals,
+    )
+
+
+def render_report_html(
+    *,
+    generated_on: date,
+    window_start: date,
+    window_end: date,
+    activity_count: int,
+    low_kudos_rows: list[dict[str, Any]],
+    non_mutuals: list[dict[str, Any]],
+) -> str:
+    template = _env_html().get_template("report.html.j2")
     return template.render(
         generated_on=generated_on.isoformat(),
         window_start=window_start.isoformat(),

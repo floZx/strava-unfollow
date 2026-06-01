@@ -29,6 +29,10 @@ def report_file() -> Path:
     return data_dir() / "report.md"
 
 
+def report_html_file() -> Path:
+    return data_dir() / "report.html"
+
+
 def ensure_data_dir() -> Path:
     d = data_dir()
     d.mkdir(parents=True, exist_ok=True)

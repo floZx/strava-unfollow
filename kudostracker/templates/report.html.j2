@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Rapport Strava — {{ generated_on }}</title>
+<style>
+  :root {
+    --fg: #1f2328;
+    --muted: #656d76;
+    --bg: #fff;
+    --row-alt: #f6f8fa;
+    --row-hover: #eef3ff;
+    --border: #d0d7de;
+    --link: #0969da;
+    --warn: #fb8500;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: var(--fg); background: var(--bg); max-width: 960px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+  h1 { border-bottom: 1px solid var(--border); padding-bottom: .3em; }
+  h2 { margin-top: 2.5rem; }
+  .meta { color: var(--muted); margin-bottom: 1rem; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+  th, td { padding: .5rem .75rem; text-align: left; border-bottom: 1px solid var(--border); }
+  th { background: var(--row-alt); font-weight: 600; }
+  tbody tr:nth-child(even) { background: var(--row-alt); }
+  tbody tr:hover { background: var(--row-hover); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .warn { color: var(--warn); font-weight: bold; }
+  .footnote { color: var(--muted); font-size: .9em; margin-top: -.5rem; }
+  ul.compact { list-style: none; padding: 0; }
+  ul.compact li { padding: .35rem 0; border-bottom: 1px solid var(--border); }
+  .empty { color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+<h1>Rapport Strava — {{ generated_on }}</h1>
+<p class="meta">Période analysée : {{ window_start }} → {{ window_end }} ({{ activity_count }} activités)</p>
+
+<h2>Mutuels qui ne te kudosent (presque) jamais</h2>
+{% if low_kudos_rows %}
+<table>
+  <thead>
+    <tr><th>Mutuel</th><th>Kudos donnés</th><th>Ratio</th><th>Ambigu</th><th>Profil</th></tr>
+  </thead>
+  <tbody>
+    {% for row in low_kudos_rows %}
+    <tr>
+      <td>{{ row.name }}</td>
+      <td class="num">{{ row.count }} / {{ activity_count }}</td>
+      <td class="num">{{ row.ratio_pct }}%</td>
+      <td>{% if row.ambiguous %}<span class="warn">⚠</span>{% endif %}</td>
+      <td><a href="{{ row.url }}" target="_blank" rel="noopener">profil</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p class="footnote">⚠ : plusieurs mutuels ont des noms qui se normalisent en (prénom, initiale) identiques. Le décompte est partagé entre eux.</p>
+{% else %}
+<p class="empty">Aucun mutuel chargé. Lance <code>kudostracker paste followers</code> et <code>kudostracker paste following</code>.</p>
+{% endif %}
+
+<h2>Comptes que tu suis qui ne te suivent pas en retour</h2>
+{% if non_mutuals %}
+<ul class="compact">
+{% for a in non_mutuals %}
+  <li><a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.name }}</a></li>
+{% endfor %}
+</ul>
+{% else %}
+<p class="empty">Aucun abonnement chargé, ou tous tes abonnements te suivent en retour.</p>
+{% endif %}
+</body>
+</html>

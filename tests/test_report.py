@@ -142,6 +142,54 @@ def test_write_report_creates_parents_and_encodes_utf8(tmp_path):
     assert p.read_bytes() == "Résultat : é à ü".encode("utf-8")
 
 
+def test_render_report_html_contains_table_and_sections():
+    rendered = report.render_report_html(
+        generated_on=date(2026, 6, 1),
+        window_start=date(2025, 6, 1),
+        window_end=date(2026, 6, 1),
+        activity_count=10,
+        low_kudos_rows=[
+            {"name": "Jean", "url": "https://example.com/1", "count": 0, "ratio_pct": 0.0, "ambiguous": False},
+        ],
+        non_mutuals=[
+            {"id": 2, "name": "Marie", "url": "https://example.com/2"},
+        ],
+    )
+    assert "<!DOCTYPE html>" in rendered
+    assert "<table>" in rendered
+    assert "Jean" in rendered
+    assert "Marie" in rendered
+    assert "Mutuels qui ne te kudosent" in rendered
+    assert "Comptes que tu suis" in rendered
+
+
+def test_render_report_html_escapes_special_chars():
+    rendered = report.render_report_html(
+        generated_on=date(2026, 6, 1),
+        window_start=date(2025, 6, 1),
+        window_end=date(2026, 6, 1),
+        activity_count=1,
+        low_kudos_rows=[
+            {"name": "<script>alert(1)</script>", "url": "u", "count": 0, "ratio_pct": 0.0, "ambiguous": False},
+        ],
+        non_mutuals=[],
+    )
+    assert "<script>" not in rendered
+    assert "&lt;script&gt;" in rendered
+
+
+def test_render_report_html_empty_followers_shows_hint():
+    rendered = report.render_report_html(
+        generated_on=date(2026, 6, 1),
+        window_start=date(2025, 6, 1),
+        window_end=date(2026, 6, 1),
+        activity_count=0,
+        low_kudos_rows=[],
+        non_mutuals=[],
+    )
+    assert "paste followers" in rendered
+
+
 def test_render_report_escapes_pipes_in_names():
     rendered = report.render_report(
         generated_on=date(2026, 6, 1),

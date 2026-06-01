@@ -182,6 +182,18 @@ def _cmd_report(args) -> int:
     out_path = Path(args.out) if args.out else paths.report_file()
     report.write_report(content, out_path)
     print(f"Report written: {out_path}")
+
+    html_content = report.render_report_html(
+        generated_on=date.today(),
+        window_start=since.date(),
+        window_end=date.today(),
+        activity_count=activity_count,
+        low_kudos_rows=rows,
+        non_mutuals=non_mutuals,
+    )
+    html_path = paths.report_html_file() if not args.out else Path(args.out).with_suffix(".html")
+    report.write_report(html_content, html_path)
+    print(f"✓ Rapport HTML écrit : {html_path}")
     return 0
 
 

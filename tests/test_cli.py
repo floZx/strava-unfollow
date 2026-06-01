@@ -87,6 +87,11 @@ def test_report_writes_file(tmp_path, monkeypatch):
     content = report_path.read_text()
     assert "Jean" in content
     assert "Marie" in content
+    html_path = tmp_path / "report.html"
+    assert html_path.exists()
+    html_content = html_path.read_text()
+    assert "<!DOCTYPE html>" in html_content
+    assert "Marie" in html_content
 
 
 def test_report_missing_followers_returns_nonzero(tmp_path, monkeypatch, capsys):
