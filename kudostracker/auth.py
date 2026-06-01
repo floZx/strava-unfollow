@@ -16,6 +16,7 @@ CALLBACK_HOST = "localhost"
 CALLBACK_PORT = 8765
 CALLBACK_PATH = "/callback"
 EXPIRY_BUFFER_SECONDS = 60
+_OAUTH_DENIED_SENTINEL = "__denied__"
 
 
 def build_authorize_url(client_id: int, redirect_uri: str, scopes: list[str]) -> str:
@@ -84,11 +85,18 @@ class _CallbackHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == CALLBACK_PATH:
             qs = parse_qs(parsed.query)
-            _CallbackHandler.code = qs.get("code", [None])[0]
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.end_headers()
-            self.wfile.write(b"<h1>OK</h1><p>Tu peux fermer cet onglet.</p>")
+            if "error" in qs:
+                _CallbackHandler.code = _OAUTH_DENIED_SENTINEL
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(b"<h1>Autorisation refus\xc3\xa9e</h1><p>Tu peux fermer cet onglet.</p>")
+            else:
+                _CallbackHandler.code = qs.get("code", [None])[0]
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(b"<h1>OK</h1><p>Tu peux fermer cet onglet.</p>")
         else:
             self.send_response(404)
             self.end_headers()
@@ -105,9 +113,15 @@ def run_oauth_flow(client_id: int, client_secret: str, tokens_path: Path) -> dic
 
     _CallbackHandler.code = None
     server = HTTPServer((CALLBACK_HOST, CALLBACK_PORT), _CallbackHandler)
-    while _CallbackHandler.code is None:
-        server.handle_request()
-    code = _CallbackHandler.code
+    try:
+        while _CallbackHandler.code is None:
+            server.handle_request()
+        code = _CallbackHandler.code
+    finally:
+        server.server_close()
+
+    if code == _OAUTH_DENIED_SENTINEL:
+        raise RuntimeError("Autorisation OAuth refusée par l'utilisateur ou Strava.")
 
     client = stravalib.Client()
     token_response = client.exchange_code_for_token(

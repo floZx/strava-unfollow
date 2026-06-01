@@ -1,6 +1,7 @@
 import json
 import time
 import pytest
+from urllib.parse import urlparse, parse_qs
 
 from kudostracker import auth
 
@@ -39,7 +40,6 @@ def test_save_and_load_tokens(tmp_path):
 
 
 def test_save_tokens_writes_0600_on_unix(tmp_path):
-    import os
     import sys
     if sys.platform == "win32":
         pytest.skip("chmod semantics differ on Windows")
@@ -85,3 +85,44 @@ def test_refresh_tokens_calls_stravalib_and_writes(tmp_path, mocker):
     assert on_disk["refresh_token"] == "new_r"
     assert on_disk["client_id"] == 999  # preserved
     assert on_disk["client_secret"] == "SEC"
+
+
+def test_callback_handler_sets_sentinel_on_error_query(mocker):
+    """Simulate Strava redirecting to /callback?error=access_denied — should set sentinel."""
+    # Reset class state
+    auth._CallbackHandler.code = None
+
+    # Verify the sentinel constant is defined and non-empty
+    assert auth._OAUTH_DENIED_SENTINEL == "__denied__"
+
+    # Verify that the parse path that the handler follows would set the sentinel
+    parsed = urlparse("/callback?error=access_denied")
+    assert parsed.path == auth.CALLBACK_PATH
+    qs = parse_qs(parsed.query)
+    assert "error" in qs
+
+    # Verify the sentinel is what run_oauth_flow compares against by exercising
+    # the handler's do_GET logic through a mock request object.
+    mock_request = mocker.MagicMock()
+    mock_request.makefile.return_value = mocker.MagicMock(
+        read=mocker.MagicMock(return_value=b"")
+    )
+
+    handler = auth._CallbackHandler.__new__(auth._CallbackHandler)
+    handler.path = "/callback?error=access_denied"
+    handler.server = mocker.MagicMock()
+    handler.request = mock_request
+    handler.client_address = ("127.0.0.1", 12345)
+
+    # Track send_response / end_headers / wfile calls
+    handler.send_response = mocker.MagicMock()
+    handler.send_header = mocker.MagicMock()
+    handler.end_headers = mocker.MagicMock()
+    handler.wfile = mocker.MagicMock()
+
+    handler.do_GET()
+
+    assert auth._CallbackHandler.code == auth._OAUTH_DENIED_SENTINEL
+    handler.send_response.assert_called_once_with(200)
+    written = handler.wfile.write.call_args[0][0]
+    assert b"refus" in written  # "refusée" is in the denial message
