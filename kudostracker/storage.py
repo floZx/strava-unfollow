@@ -1,6 +1,5 @@
 import sqlite3
 from pathlib import Path
-from typing import Union
 
 
 SCHEMA = """
@@ -25,7 +24,7 @@ CREATE INDEX IF NOT EXISTS idx_kudoers_athlete ON kudoers(athlete_id);
 
 
 class Storage:
-    def __init__(self, db_path: Union[str, Path]):
+    def __init__(self, db_path: str | Path):
         self.conn = sqlite3.connect(str(db_path))
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON")
@@ -42,7 +41,9 @@ class Storage:
             """
             INSERT INTO activities (id, start_date, name)
             VALUES (?, ?, ?)
-            ON CONFLICT(id) DO NOTHING
+            ON CONFLICT(id) DO UPDATE SET
+              start_date = excluded.start_date,
+              name       = excluded.name
             """,
             (activity_id, start_date, name),
         )

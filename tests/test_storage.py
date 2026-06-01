@@ -15,6 +15,17 @@ def test_upsert_activity_inserts_then_idempotent(storage):
     assert rows[0]["kudos_synced"] == 0
 
 
+def test_upsert_activity_updates_name_on_conflict(storage):
+    storage.upsert_activity(1, "2026-01-01T10:00:00Z", "Original name")
+    storage.mark_kudos_synced(1)
+    storage.upsert_activity(1, "2026-01-01T10:00:00Z", "Renamed")
+    rows = storage.all_activities()
+    assert len(rows) == 1
+    assert rows[0]["name"] == "Renamed"
+    # kudos_synced must NOT be reset
+    assert rows[0]["kudos_synced"] == 1
+
+
 def test_activities_needing_kudos_sync(storage):
     storage.upsert_activity(1, "2026-01-01T10:00:00Z", "A")
     storage.upsert_activity(2, "2026-01-02T10:00:00Z", "B")
